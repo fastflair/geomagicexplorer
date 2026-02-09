@@ -29,8 +29,8 @@ const MapView = ({ layers, onMapReady, onLayerError }: MapViewProps) => {
     // Suppress ArcGIS identity manager popup for layers requiring auth
     const esriId = await import("@arcgis/core/identity/IdentityManager").then((m) => m.default);
     esriId.destroyCredentials();
-    (esriId as any).dialog = null;
-    esriId.on("credential-create", (e: any) => { try { e.cancel(); } catch {} });
+    (esriId as any).getCredential = () => Promise.reject(new Error("Auth suppressed"));
+    (esriId as any).checkSignInStatus = () => Promise.reject(new Error("Auth suppressed"));
 
     const [Map, MapView, FeatureLayer, Basemap, VectorTileLayer, KMLLayer, GeoJSONLayer, CSVLayer, WMSLayer, WFSLayer, MapImageLayer, OGCFeatureLayer, ImageryTileLayer] = await Promise.all([
       import("@arcgis/core/Map").then((m) => m.default),

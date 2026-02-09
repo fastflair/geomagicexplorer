@@ -23,22 +23,28 @@ Your job: Given the user's natural language query, return a JSON array of matchi
 
 IMPORTANT RULES:
 - Return REAL, publicly accessible URLs only. Supported formats:
-  1. ArcGIS FeatureServer URLs (ending in /FeatureServer/0 or similar)
-  2. KML files (.kml URLs hosted publicly)
-  3. KMZ files (.kmz URLs hosted publicly)
-  4. GeoJSON files (.geojson or .json URLs hosted publicly)
+  1. "feature" — ArcGIS FeatureServer URLs (ending in /FeatureServer/0 or similar)
+  2. "kml" — KML or KMZ files (.kml / .kmz URLs hosted publicly)
+  3. "geojson" — GeoJSON files (.geojson or .json URLs)
+  4. "csv" — CSV files with lat/lon columns (.csv URLs)
+  5. "wms" — OGC WMS services (Web Map Service endpoints)
+  6. "wfs" — OGC WFS services (Web Feature Service endpoints)
+  7. "map-image" — ArcGIS MapServer URLs (dynamic map services)
+  8. "ogc-feature" — OGC API Features endpoints
+  9. "imagery-tile" — ArcGIS ImageServer URLs (raster/imagery services)
 - Use well-known public data sources like:
   - services9.arcgis.com/RHVPKKiFTONKtxq3 (Living Atlas)
   - services1.arcgis.com/Hp6G80Pky0om7QvQ (Esri open data)
   - services.arcgis.com (various public services)
   - sampleserver6.arcgisonline.com
-  - earthquake.usgs.gov (USGS data, KML/GeoJSON feeds)
+  - earthquake.usgs.gov (USGS data — KML/GeoJSON/CSV feeds)
   - data.gov, hub.arcgis.com, and other open data portals
-  - Google Earth Gallery KML files (earth.google.com/gallery)
+  - NASA, NOAA, USGS public WMS/WFS services
+  - nowcoast.noaa.gov, mesonet.agron.iastate.edu (weather WMS)
+- Prefer ArcGIS FeatureServer when available, but use other formats when they better match the query
 - If you're not confident a URL exists, don't include it
 - Return 1-3 layers maximum
 - Pick a distinctive hex color for each layer
-- Set "type" to the correct format: "feature" for ArcGIS FeatureServer, "kml" for KML/KMZ, "geojson" for GeoJSON
 
 You must respond using the suggest_layers tool.`;
 
@@ -62,7 +68,7 @@ You must respond using the suggest_layers tool.`;
               function: {
                 name: "suggest_layers",
                 description:
-                  "Return matching public ArcGIS FeatureServer layer URLs",
+                  "Return matching public geospatial layer URLs in any supported format",
                 parameters: {
                   type: "object",
                   properties: {
@@ -86,7 +92,7 @@ You must respond using the suggest_layers tool.`;
                           },
                           type: {
                             type: "string",
-                            enum: ["feature", "kml", "geojson"],
+                            enum: ["feature", "kml", "geojson", "csv", "wms", "wfs", "map-image", "ogc-feature", "imagery-tile"],
                             description: "Layer format type",
                           },
                         },

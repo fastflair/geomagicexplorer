@@ -26,6 +26,12 @@ const MapView = ({ layers, onMapReady, onLayerError }: MapViewProps) => {
   const initMap = useCallback(async () => {
     if (!mapDiv.current || viewRef.current) return;
 
+    // Suppress ArcGIS identity manager popup for layers requiring auth
+    const esriId = await import("@arcgis/core/identity/IdentityManager").then((m) => m.default);
+    esriId.destroyCredentials();
+    (esriId as any).dialog = null;
+    esriId.on("credential-create", (e: any) => { try { e.cancel(); } catch {} });
+
     const [Map, MapView, FeatureLayer, Basemap, VectorTileLayer, KMLLayer, GeoJSONLayer, CSVLayer, WMSLayer, WFSLayer, MapImageLayer, OGCFeatureLayer, ImageryTileLayer] = await Promise.all([
       import("@arcgis/core/Map").then((m) => m.default),
       import("@arcgis/core/views/MapView").then((m) => m.default),
@@ -90,7 +96,12 @@ const MapView = ({ layers, onMapReady, onLayerError }: MapViewProps) => {
         layerMapRef.current.set(layerConfig.id, fl);
       }).catch((err: any) => {
         console.warn(`Layer "${layerConfig.title}" failed to load:`, err);
-        toast.error(`Layer "${layerConfig.title}" could not be loaded — the service may be unavailable.`);
+        const msg = err?.details?.raw?.message || err?.message || "";
+        if (msg.toLowerCase().includes("token")) {
+          toast.error(`Layer "${layerConfig.title}" requires authentication and was removed.`);
+        } else {
+          toast.error(`Layer "${layerConfig.title}" could not be loaded — the service may be unavailable.`);
+        }
         onLayerError?.(layerConfig.id);
       });
     }

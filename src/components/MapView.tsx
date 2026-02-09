@@ -109,49 +109,32 @@ const MapView = ({ layers, basemapId = "dark-gray-vector", onMapReady, onLayerEr
 
     await view.when();
 
-    // Hover tooltip: show feature details on pointer-move
-    let hoverHandle: any = null;
-    const tooltip = document.createElement("div");
-    tooltip.className = "map-hover-tooltip";
-    tooltip.style.cssText =
-      "position:absolute;pointer-events:none;display:none;z-index:50;" +
-      "background:hsl(220 25% 10%/0.92);backdrop-filter:blur(8px);" +
-      "border:1px solid hsl(220 20% 22%);border-radius:6px;" +
-      "padding:8px 12px;max-width:280px;font-size:12px;color:hsl(210 20% 88%);" +
-      "box-shadow:0 4px 16px hsl(0 0% 0%/0.4);";
-    mapDiv.current?.appendChild(tooltip);
-
-    view.on("pointer-move", (evt: any) => {
-      if (hoverHandle) { hoverHandle.remove(); hoverHandle = null; }
-      hoverHandle = view.hitTest(evt).then((response: any) => {
+    // Click to show details via built-in popup; clear on empty click
+    (view.popup as any).autoOpenEnabled = false;
+    view.on("click", (evt: any) => {
+      view.hitTest(evt).then((response: any) => {
         const result = response.results?.find((r: any) => r.graphic?.attributes);
         if (!result) {
-          tooltip.style.display = "none";
+          view.popup.close();
           return;
         }
         const attrs = result.graphic.attributes;
         const layerTitle = result.graphic.layer?.title || "Feature";
-        // Build tooltip content — show up to 6 key attributes
-        const skipKeys = new Set(["ObjectID", "OBJECTID", "FID", "Shape", "Shape_Length", "Shape_Area", "GlobalID"]);
+        const skipKeys = new Set(["ObjectID", "OBJECTID", "FID", "Shape", "Shape_Length", "Shape_Area", "GlobalID", "SHAPE"]);
         const entries = Object.entries(attrs)
           .filter(([k]) => !skipKeys.has(k) && attrs[k] != null && attrs[k] !== "")
-          .slice(0, 6);
-        if (entries.length === 0) {
-          tooltip.style.display = "none";
-          return;
-        }
-        tooltip.innerHTML =
-          `<div style="font-weight:600;margin-bottom:4px;color:hsl(200 80% 60%);font-size:11px;text-transform:uppercase;letter-spacing:0.5px">${layerTitle}</div>` +
-          entries
-            .map(([k, v]) => `<div style="display:flex;gap:6px;line-height:1.4"><span style="color:hsl(215 15% 55%);flex-shrink:0">${k}:</span><span style="word-break:break-word">${v}</span></div>`)
-            .join("");
-        tooltip.style.display = "block";
-        tooltip.style.left = evt.x + 14 + "px";
-        tooltip.style.top = evt.y + 14 + "px";
+          .slice(0, 12);
+        if (entries.length === 0) { view.popup.close(); return; }
+        const content = entries
+          .map(([k, v]) => `<tr><td style="color:#8899aa;padding:2px 8px 2px 0;white-space:nowrap">${k}</td><td style="word-break:break-word">${v}</td></tr>`)
+          .join("");
+        view.popup.open({
+          title: layerTitle,
+          content: `<table style="font-size:12px;line-height:1.5">${content}</table>`,
+          location: evt.mapPoint,
+        });
       });
     });
-
-    view.on("pointer-leave", () => { tooltip.style.display = "none"; });
 
     onMapReady?.();
   }, []);

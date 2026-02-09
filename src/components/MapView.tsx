@@ -1,4 +1,5 @@
 import { useEffect, useRef, useCallback } from "react";
+import { toast } from "sonner";
 
 interface LayerConfig {
   id: string;
@@ -10,9 +11,10 @@ interface LayerConfig {
 interface MapViewProps {
   layers: LayerConfig[];
   onMapReady?: () => void;
+  onLayerError?: (id: string) => void;
 }
 
-const MapView = ({ layers, onMapReady }: MapViewProps) => {
+const MapView = ({ layers, onMapReady, onLayerError }: MapViewProps) => {
   const mapDiv = useRef<HTMLDivElement>(null);
   const viewRef = useRef<any>(null);
   const mapRef = useRef<any>(null);
@@ -63,8 +65,14 @@ const MapView = ({ layers, onMapReady }: MapViewProps) => {
         outFields: ["*"],
         popupEnabled: true,
       });
-      map.add(fl);
-      layerMapRef.current.set(layerConfig.id, fl);
+      fl.load().then(() => {
+        map.add(fl);
+        layerMapRef.current.set(layerConfig.id, fl);
+      }).catch((err: any) => {
+        console.warn(`Layer "${layerConfig.title}" failed to load:`, err);
+        toast.error(`Layer "${layerConfig.title}" could not be loaded — the service may be unavailable.`);
+        onLayerError?.(layerConfig.id);
+      });
     }
 
     await view.when();
@@ -78,7 +86,6 @@ const MapView = ({ layers, onMapReady }: MapViewProps) => {
       if (existing) {
         existing.visible = layerConfig.visible;
       } else if (mapRef.current) {
-        // Dynamically add new layer
         import("@arcgis/core/layers/FeatureLayer").then(({ default: FeatureLayer }) => {
           const fl = new FeatureLayer({
             url: layerConfig.url,
@@ -87,8 +94,14 @@ const MapView = ({ layers, onMapReady }: MapViewProps) => {
             outFields: ["*"],
             popupEnabled: true,
           });
-          mapRef.current.add(fl);
-          layerMapRef.current.set(layerConfig.id, fl);
+          fl.load().then(() => {
+            mapRef.current.add(fl);
+            layerMapRef.current.set(layerConfig.id, fl);
+          }).catch((err: any) => {
+            console.warn(`Layer "${layerConfig.title}" failed to load:`, err);
+            toast.error(`Layer "${layerConfig.title}" could not be loaded — the service may be unavailable.`);
+            onLayerError?.(layerConfig.id);
+          });
         });
       }
     }

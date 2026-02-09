@@ -17,20 +17,28 @@ serve(async (req) => {
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
 
-    const systemPrompt = `You are a geospatial data expert. The user wants to find public ArcGIS FeatureServer layers.
+    const systemPrompt = `You are a geospatial data expert. The user wants to find public geospatial data layers.
 
-Your job: Given the user's natural language query, return a JSON array of matching public ArcGIS REST service URLs.
+Your job: Given the user's natural language query, return a JSON array of matching public geospatial data URLs.
 
 IMPORTANT RULES:
-- Only return REAL, publicly accessible ArcGIS FeatureServer URLs (ending in /FeatureServer/0 or similar)
+- Return REAL, publicly accessible URLs only. Supported formats:
+  1. ArcGIS FeatureServer URLs (ending in /FeatureServer/0 or similar)
+  2. KML files (.kml URLs hosted publicly)
+  3. KMZ files (.kmz URLs hosted publicly)
+  4. GeoJSON files (.geojson or .json URLs hosted publicly)
 - Use well-known public data sources like:
   - services9.arcgis.com/RHVPKKiFTONKtxq3 (Living Atlas)
   - services1.arcgis.com/Hp6G80Pky0om7QvQ (Esri open data)
   - services.arcgis.com (various public services)
   - sampleserver6.arcgisonline.com
+  - earthquake.usgs.gov (USGS data, KML/GeoJSON feeds)
+  - data.gov, hub.arcgis.com, and other open data portals
+  - Google Earth Gallery KML files (earth.google.com/gallery)
 - If you're not confident a URL exists, don't include it
 - Return 1-3 layers maximum
 - Pick a distinctive hex color for each layer
+- Set "type" to the correct format: "feature" for ArcGIS FeatureServer, "kml" for KML/KMZ, "geojson" for GeoJSON
 
 You must respond using the suggest_layers tool.`;
 
@@ -66,7 +74,7 @@ You must respond using the suggest_layers tool.`;
                           url: {
                             type: "string",
                             description:
-                              "Full ArcGIS FeatureServer REST URL",
+                              "Full public URL to the geospatial data",
                           },
                           title: {
                             type: "string",
@@ -76,8 +84,13 @@ You must respond using the suggest_layers tool.`;
                             type: "string",
                             description: "Hex color for the layer",
                           },
+                          type: {
+                            type: "string",
+                            enum: ["feature", "kml", "geojson"],
+                            description: "Layer format type",
+                          },
                         },
-                        required: ["url", "title", "color"],
+                        required: ["url", "title", "color", "type"],
                         additionalProperties: false,
                       },
                     },

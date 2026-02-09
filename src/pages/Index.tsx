@@ -50,10 +50,10 @@ const Index = () => {
   }, []);
 
   const handleAILayer = useCallback(
-    (layer: { id: string; url: string; title: string; color: string }) => {
+    (layer: { id: string; url: string; title: string; color: string; type?: string }) => {
       setLayers((prev) => [
         ...prev,
-        { ...layer, visible: true, isAI: true },
+        { ...layer, visible: true, isAI: true, type: (layer.type as LayerItem["type"]) || "feature" },
       ]);
     },
     []

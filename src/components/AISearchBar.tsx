@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
 interface AISearchBarProps {
-  onLayerFound: (layer: { id: string; url: string; title: string; color: string }) => void;
+  onLayerFound: (layer: { id: string; url: string; title: string; color: string; type?: string }) => void;
 }
 
 const AISearchBar = ({ onLayerFound }: AISearchBarProps) => {
@@ -29,6 +29,7 @@ const AISearchBar = ({ onLayerFound }: AISearchBarProps) => {
             url: layer.url,
             title: layer.title,
             color: layer.color || "hsl(270, 60%, 60%)",
+            type: layer.type || "feature",
           });
         }
         toast.success(`Added ${data.layers.length} layer(s) from AI search`);

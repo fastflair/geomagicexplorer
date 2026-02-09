@@ -8,6 +8,7 @@ export interface LayerItem {
   visible: boolean;
   color: string;
   isAI?: boolean;
+  type?: "feature" | "kml" | "geojson";
 }
 
 interface LayerPanelProps {

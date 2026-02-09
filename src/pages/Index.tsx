@@ -113,7 +113,7 @@ const Index = () => {
 
       {/* Map */}
       <div className="flex-1 relative">
-        <MapView layers={layers} />
+        <MapView layers={layers} onLayerError={handleRemove} />
       </div>
     </div>
   );

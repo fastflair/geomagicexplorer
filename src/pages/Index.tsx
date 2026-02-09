@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect } from "react";
 import { Globe, ChevronLeft, ChevronRight, LogOut } from "lucide-react";
 import MapView from "@/components/MapView";
 import LayerPanel, { type LayerItem } from "@/components/LayerPanel";
+import BasemapSelector from "@/components/BasemapSelector";
 import AISearchBar from "@/components/AISearchBar";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
@@ -40,6 +41,7 @@ const DEFAULT_LAYERS: LayerItem[] = [
 
 const Index = () => {
   const [layers, setLayers] = useState<LayerItem[]>(DEFAULT_LAYERS);
+  const [basemapId, setBasemapId] = useState("dark-gray-vector");
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const { user, signOut } = useAuth();
 
@@ -173,6 +175,10 @@ const Index = () => {
             />
 
             <div className="border-t border-sidebar-border pt-4">
+              <BasemapSelector selected={basemapId} onChange={setBasemapId} />
+            </div>
+
+            <div className="border-t border-sidebar-border pt-4">
               <AISearchBar onLayerFound={handleAILayer} />
             </div>
           </div>
@@ -201,7 +207,7 @@ const Index = () => {
 
       {/* Map */}
       <div className="flex-1 relative">
-        <MapView layers={layers} onLayerError={handleRemove} />
+        <MapView layers={layers} basemapId={basemapId} onLayerError={handleRemove} />
       </div>
     </div>
   );

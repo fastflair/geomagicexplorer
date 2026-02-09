@@ -13,11 +13,12 @@ interface LayerConfig {
 
 interface MapViewProps {
   layers: LayerConfig[];
+  basemapId?: string;
   onMapReady?: () => void;
   onLayerError?: (id: string) => void;
 }
 
-const MapView = ({ layers, onMapReady, onLayerError }: MapViewProps) => {
+const MapView = ({ layers, basemapId = "dark-gray-vector", onMapReady, onLayerError }: MapViewProps) => {
   const mapDiv = useRef<HTMLDivElement>(null);
   const viewRef = useRef<any>(null);
   const mapRef = useRef<any>(null);
@@ -151,6 +152,12 @@ const MapView = ({ layers, onMapReady, onLayerError }: MapViewProps) => {
       }
     }
   }, [layers]);
+
+  // Sync basemap changes
+  useEffect(() => {
+    if (!mapRef.current) return;
+    mapRef.current.basemap = basemapId;
+  }, [basemapId]);
 
   useEffect(() => {
     initMap();

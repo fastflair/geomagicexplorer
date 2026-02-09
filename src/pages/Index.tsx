@@ -1,8 +1,11 @@
-import { useState, useCallback } from "react";
-import { Globe, ChevronLeft, ChevronRight } from "lucide-react";
+import { useState, useCallback, useEffect } from "react";
+import { Globe, ChevronLeft, ChevronRight, LogOut } from "lucide-react";
 import MapView from "@/components/MapView";
 import LayerPanel, { type LayerItem } from "@/components/LayerPanel";
 import AISearchBar from "@/components/AISearchBar";
+import { useAuth } from "@/hooks/useAuth";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 
 const DEFAULT_LAYERS: LayerItem[] = [
   {
@@ -38,25 +41,101 @@ const DEFAULT_LAYERS: LayerItem[] = [
 const Index = () => {
   const [layers, setLayers] = useState<LayerItem[]>(DEFAULT_LAYERS);
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const { user, signOut } = useAuth();
+
+  // Load saved layers from DB
+  useEffect(() => {
+    if (!user) return;
+    const load = async () => {
+      const { data, error } = await supabase
+        .from("saved_layers")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: true });
+
+      if (error) {
+        console.error("Failed to load saved layers:", error);
+        return;
+      }
+      if (data && data.length > 0) {
+        const saved: LayerItem[] = data.map((r) => ({
+          id: r.id,
+          url: r.url,
+          title: r.title,
+          color: r.color,
+          visible: r.visible,
+          type: r.type as LayerItem["type"],
+          isAI: r.is_ai,
+        }));
+        setLayers([...DEFAULT_LAYERS, ...saved]);
+      }
+    };
+    load();
+  }, [user]);
 
   const handleToggle = useCallback((id: string) => {
     setLayers((prev) =>
-      prev.map((l) => (l.id === id ? { ...l, visible: !l.visible } : l))
+      prev.map((l) => {
+        if (l.id !== id) return l;
+        const updated = { ...l, visible: !l.visible };
+        // Persist visibility for saved (AI) layers
+        if (l.isAI) {
+          supabase.from("saved_layers").update({ visible: updated.visible }).eq("id", id).then();
+        }
+        return updated;
+      })
     );
   }, []);
 
   const handleRemove = useCallback((id: string) => {
-    setLayers((prev) => prev.filter((l) => l.id !== id));
+    setLayers((prev) => {
+      const layer = prev.find((l) => l.id === id);
+      if (layer?.isAI) {
+        supabase.from("saved_layers").delete().eq("id", id).then();
+      }
+      return prev.filter((l) => l.id !== id);
+    });
   }, []);
 
   const handleAILayer = useCallback(
-    (layer: { id: string; url: string; title: string; color: string; type?: string }) => {
+    async (layer: { id: string; url: string; title: string; color: string; type?: string }) => {
+      if (!user) return;
+
+      // Save to DB
+      const { data, error } = await supabase
+        .from("saved_layers")
+        .insert({
+          user_id: user.id,
+          url: layer.url,
+          title: layer.title,
+          color: layer.color,
+          type: layer.type || "feature",
+          visible: true,
+          is_ai: true,
+        })
+        .select()
+        .single();
+
+      if (error) {
+        console.error("Failed to save layer:", error);
+        toast.error("Failed to save layer");
+        return;
+      }
+
       setLayers((prev) => [
         ...prev,
-        { ...layer, visible: true, isAI: true, type: (layer.type as LayerItem["type"]) || "feature" },
+        {
+          id: data.id,
+          url: data.url,
+          title: data.title,
+          color: data.color,
+          visible: true,
+          isAI: true,
+          type: data.type as LayerItem["type"],
+        },
       ]);
     },
-    []
+    [user]
   );
 
   return (
@@ -69,11 +148,20 @@ const Index = () => {
       >
         <div className="w-72 h-full bg-sidebar flex flex-col border-r border-sidebar-border">
           {/* Logo */}
-          <div className="flex items-center gap-2.5 px-5 py-4 border-b border-sidebar-border">
-            <Globe className="h-5 w-5 text-primary animate-pulse-glow" />
-            <h1 className="text-base font-bold text-sidebar-foreground tracking-tight">
-              GeoExplorer
-            </h1>
+          <div className="flex items-center justify-between px-5 py-4 border-b border-sidebar-border">
+            <div className="flex items-center gap-2.5">
+              <Globe className="h-5 w-5 text-primary animate-pulse-glow" />
+              <h1 className="text-base font-bold text-sidebar-foreground tracking-tight">
+                GeoExplorer
+              </h1>
+            </div>
+            <button
+              onClick={signOut}
+              className="p-1.5 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+              title="Sign out"
+            >
+              <LogOut className="h-4 w-4" />
+            </button>
           </div>
 
           {/* Layers */}

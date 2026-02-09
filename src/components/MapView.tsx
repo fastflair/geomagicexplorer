@@ -6,6 +6,7 @@ interface LayerConfig {
   url: string;
   title: string;
   visible: boolean;
+  type?: "feature" | "kml" | "geojson";
 }
 
 interface MapViewProps {
@@ -23,12 +24,14 @@ const MapView = ({ layers, onMapReady, onLayerError }: MapViewProps) => {
   const initMap = useCallback(async () => {
     if (!mapDiv.current || viewRef.current) return;
 
-    const [Map, MapView, FeatureLayer, Basemap, VectorTileLayer] = await Promise.all([
+    const [Map, MapView, FeatureLayer, Basemap, VectorTileLayer, KMLLayer, GeoJSONLayer] = await Promise.all([
       import("@arcgis/core/Map").then((m) => m.default),
       import("@arcgis/core/views/MapView").then((m) => m.default),
       import("@arcgis/core/layers/FeatureLayer").then((m) => m.default),
       import("@arcgis/core/Basemap").then((m) => m.default),
       import("@arcgis/core/layers/VectorTileLayer").then((m) => m.default),
+      import("@arcgis/core/layers/KMLLayer").then((m) => m.default),
+      import("@arcgis/core/layers/GeoJSONLayer").then((m) => m.default),
     ]);
 
     const basemap = new Basemap({
@@ -56,15 +59,19 @@ const MapView = ({ layers, onMapReady, onLayerError }: MapViewProps) => {
 
     viewRef.current = view;
 
-    // Add initial layers
+    const createLayer = (config: LayerConfig, FL: any, KML: any, GJ: any) => {
+      const layerType = config.type || "feature";
+      if (layerType === "kml") {
+        return new KML({ url: config.url, title: config.title, visible: config.visible });
+      } else if (layerType === "geojson") {
+        return new GJ({ url: config.url, title: config.title, visible: config.visible });
+      } else {
+        return new FL({ url: config.url, title: config.title, visible: config.visible, outFields: ["*"], popupEnabled: true });
+      }
+    };
+
     for (const layerConfig of layers) {
-      const fl = new FeatureLayer({
-        url: layerConfig.url,
-        title: layerConfig.title,
-        visible: layerConfig.visible,
-        outFields: ["*"],
-        popupEnabled: true,
-      });
+      const fl = createLayer(layerConfig, FeatureLayer, KMLLayer, GeoJSONLayer);
       fl.load().then(() => {
         map.add(fl);
         layerMapRef.current.set(layerConfig.id, fl);
@@ -86,14 +93,20 @@ const MapView = ({ layers, onMapReady, onLayerError }: MapViewProps) => {
       if (existing) {
         existing.visible = layerConfig.visible;
       } else if (mapRef.current) {
-        import("@arcgis/core/layers/FeatureLayer").then(({ default: FeatureLayer }) => {
-          const fl = new FeatureLayer({
-            url: layerConfig.url,
-            title: layerConfig.title,
-            visible: layerConfig.visible,
-            outFields: ["*"],
-            popupEnabled: true,
-          });
+        Promise.all([
+          import("@arcgis/core/layers/FeatureLayer").then((m) => m.default),
+          import("@arcgis/core/layers/KMLLayer").then((m) => m.default),
+          import("@arcgis/core/layers/GeoJSONLayer").then((m) => m.default),
+        ]).then(([FL, KML, GJ]) => {
+          const layerType = layerConfig.type || "feature";
+          let fl: any;
+          if (layerType === "kml") {
+            fl = new KML({ url: layerConfig.url, title: layerConfig.title, visible: layerConfig.visible });
+          } else if (layerType === "geojson") {
+            fl = new GJ({ url: layerConfig.url, title: layerConfig.title, visible: layerConfig.visible });
+          } else {
+            fl = new FL({ url: layerConfig.url, title: layerConfig.title, visible: layerConfig.visible, outFields: ["*"], popupEnabled: true });
+          }
           fl.load().then(() => {
             mapRef.current.add(fl);
             layerMapRef.current.set(layerConfig.id, fl);

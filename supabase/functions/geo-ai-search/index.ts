@@ -6,6 +6,44 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type",
 };
 
+async function searchArcGISHub(query: string): Promise<any[]> {
+  const searchUrl = new URL("https://www.arcgis.com/sharing/rest/search");
+  searchUrl.searchParams.set("q", `${query} type:("Feature Service" OR "Map Service" OR "Image Service" OR "KML" OR "WMS" OR "WFS" OR "GeoJSON")`);
+  searchUrl.searchParams.set("num", "10");
+  searchUrl.searchParams.set("sortField", "numViews");
+  searchUrl.searchParams.set("sortOrder", "desc");
+  searchUrl.searchParams.set("f", "json");
+
+  const res = await fetch(searchUrl.toString());
+  if (!res.ok) return [];
+  const data = await res.json();
+  return data.results || [];
+}
+
+function mapItemToLayer(item: any): { url: string; title: string; type: string } | null {
+  const t = (item.type || "").toLowerCase();
+  let url = item.url;
+  if (!url) return null;
+
+  if (t.includes("feature service")) {
+    if (!url.includes("/FeatureServer")) url += "/FeatureServer";
+    url += "/0";
+    return { url, title: item.title, type: "feature" };
+  }
+  if (t.includes("map service")) {
+    if (!url.includes("/MapServer")) url += "/MapServer";
+    return { url, title: item.title, type: "map-image" };
+  }
+  if (t.includes("image service")) {
+    return { url, title: item.title, type: "imagery-tile" };
+  }
+  if (t.includes("kml")) return { url, title: item.title, type: "kml" };
+  if (t.includes("wms")) return { url, title: item.title, type: "wms" };
+  if (t.includes("wfs")) return { url, title: item.title, type: "wfs" };
+  if (t.includes("geojson")) return { url, title: item.title, type: "geojson" };
+  return null;
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS")
     return new Response(null, { headers: corsHeaders });
@@ -14,41 +52,38 @@ serve(async (req) => {
     const { query } = await req.json();
     if (!query) throw new Error("Missing query");
 
+    // Step 1: Search ArcGIS Hub for real layers
+    console.log("Searching ArcGIS Hub for:", query);
+    const hubResults = await searchArcGISHub(query);
+    console.log(`Found ${hubResults.length} results from ArcGIS Hub`);
+
+    if (hubResults.length === 0) {
+      return new Response(JSON.stringify({ layers: [] }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Map results to layer configs
+    const candidates = hubResults
+      .map(mapItemToLayer)
+      .filter(Boolean)
+      .slice(0, 6);
+
+    if (candidates.length === 0) {
+      return new Response(JSON.stringify({ layers: [] }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Step 2: Use AI to pick the best 1-3 and assign colors
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
 
-    const systemPrompt = `You are a geospatial data expert. The user wants to find public geospatial data layers.
+    const systemPrompt = `You are a geospatial data assistant. The user searched for "${query}". Here are REAL, verified layers found from ArcGIS Hub:
 
-Your job: Given the user's natural language query, return a JSON array of matching public geospatial data URLs.
+${JSON.stringify(candidates, null, 2)}
 
-CRITICAL: Only return URLs you are CERTAIN exist. Do NOT guess or fabricate URLs. If you are not 100% sure a service URL is real and publicly accessible, do NOT include it. It is better to return fewer results than to return broken URLs.
-
-VERIFIED WORKING SOURCES (prefer these):
-- https://services9.arcgis.com/RHVPKKiFTONKtxq3/arcgis/rest/services/ (Esri Living Atlas — many verified layers)
-- https://services1.arcgis.com/Hp6G80Pky0om7QvQ/arcgis/rest/services/ (Esri open data)
-- https://sampleserver6.arcgisonline.com/arcgis/rest/services/ (Esri sample server)
-- https://earthquake.usgs.gov/earthquakes/feed/ (USGS earthquake feeds — GeoJSON/KML)
-- https://nowcoast.noaa.gov/arcgis/rest/services/ (NOAA weather — MapServer)
-- https://services.arcgisonline.com/arcgis/rest/services/ (Esri basemap services)
-
-SUPPORTED FORMATS:
-1. "feature" — ArcGIS FeatureServer (e.g. .../FeatureServer/0)
-2. "kml" — KML or KMZ files
-3. "geojson" — GeoJSON files (.geojson or .json)
-4. "csv" — CSV files with lat/lon columns
-5. "wms" — OGC WMS endpoints
-6. "wfs" — OGC WFS endpoints
-7. "map-image" — ArcGIS MapServer (e.g. .../MapServer)
-8. "ogc-feature" — OGC API Features
-9. "imagery-tile" — ArcGIS ImageServer
-
-RULES:
-- Do NOT invent service names. Only use service names you have seen before.
-- If unsure whether a specific service exists under a domain, return an empty array instead.
-- Return 1-3 layers maximum.
-- Pick a distinctive hex color for each layer.
-
-You must respond using the suggest_layers tool.`;
+Pick the 1-3 most relevant layers for the user's query. Assign each a distinctive hex color. Return them using the suggest_layers tool. Only return layers from the list above — do NOT modify URLs.`;
 
     const response = await fetch(
       "https://ai.gateway.lovable.dev/v1/chat/completions",
@@ -62,15 +97,14 @@ You must respond using the suggest_layers tool.`;
           model: "google/gemini-3-flash-preview",
           messages: [
             { role: "system", content: systemPrompt },
-            { role: "user", content: query },
+            { role: "user", content: `Pick the best layers for: ${query}` },
           ],
           tools: [
             {
               type: "function",
               function: {
                 name: "suggest_layers",
-                description:
-                  "Return matching public geospatial layer URLs in any supported format",
+                description: "Return the best matching layers with colors",
                 parameters: {
                   type: "object",
                   properties: {
@@ -79,23 +113,12 @@ You must respond using the suggest_layers tool.`;
                       items: {
                         type: "object",
                         properties: {
-                          url: {
-                            type: "string",
-                            description:
-                              "Full public URL to the geospatial data",
-                          },
-                          title: {
-                            type: "string",
-                            description: "Human-readable layer name",
-                          },
-                          color: {
-                            type: "string",
-                            description: "Hex color for the layer",
-                          },
+                          url: { type: "string" },
+                          title: { type: "string" },
+                          color: { type: "string", description: "Hex color" },
                           type: {
                             type: "string",
                             enum: ["feature", "kml", "geojson", "csv", "wms", "wfs", "map-image", "ogc-feature", "imagery-tile"],
-                            description: "Layer format type",
                           },
                         },
                         required: ["url", "title", "color", "type"],
@@ -109,43 +132,38 @@ You must respond using the suggest_layers tool.`;
               },
             },
           ],
-          tool_choice: {
-            type: "function",
-            function: { name: "suggest_layers" },
-          },
+          tool_choice: { type: "function", function: { name: "suggest_layers" } },
         }),
       }
     );
 
     if (!response.ok) {
-      if (response.status === 429) {
-        return new Response(
-          JSON.stringify({ error: "Rate limited, try again shortly" }),
-          { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-      if (response.status === 402) {
-        return new Response(
-          JSON.stringify({ error: "AI credits exhausted" }),
-          { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-      const text = await response.text();
-      console.error("AI gateway error:", response.status, text);
-      throw new Error("AI gateway error");
+      // Fallback: return top 3 candidates with default colors if AI fails
+      const fallbackColors = ["#e74c3c", "#3498db", "#2ecc71"];
+      const fallback = candidates.slice(0, 3).map((c: any, i: number) => ({
+        ...c,
+        color: fallbackColors[i],
+      }));
+      return new Response(JSON.stringify({ layers: fallback }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     const data = await response.json();
     const toolCall = data.choices?.[0]?.message?.tool_calls?.[0];
 
     if (!toolCall) {
-      return new Response(JSON.stringify({ layers: [] }), {
+      const fallbackColors = ["#e74c3c", "#3498db", "#2ecc71"];
+      const fallback = candidates.slice(0, 3).map((c: any, i: number) => ({
+        ...c,
+        color: fallbackColors[i],
+      }));
+      return new Response(JSON.stringify({ layers: fallback }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
     const parsed = JSON.parse(toolCall.function.arguments);
-
     return new Response(JSON.stringify({ layers: parsed.layers || [] }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

@@ -1,0 +1,4 @@
+project_id = "xaneyghrfzdszobjqcgq"
+
+[functions."geo-ai-search"]
+verify_jwt = false

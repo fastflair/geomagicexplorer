@@ -109,30 +109,14 @@ const MapView = ({ layers, basemapId = "dark-gray-vector", onMapReady, onLayerEr
 
     await view.when();
 
-    // Click to show details via built-in popup; clear on empty click
-    (view.popup as any).autoOpenEnabled = false;
+    // Let ArcGIS handle popups natively (layers have popupEnabled + outFields=["*"])
+    // Just clear popup when clicking empty space
     view.on("click", (evt: any) => {
       view.hitTest(evt).then((response: any) => {
-        const result = response.results?.find((r: any) => r.graphic?.attributes);
-        if (!result) {
+        const hasGraphic = response.results?.some((r: any) => r.graphic?.layer);
+        if (!hasGraphic) {
           view.popup.close();
-          return;
         }
-        const attrs = result.graphic.attributes;
-        const layerTitle = result.graphic.layer?.title || "Feature";
-        const skipKeys = new Set(["ObjectID", "OBJECTID", "FID", "Shape", "Shape_Length", "Shape_Area", "GlobalID", "SHAPE"]);
-        const entries = Object.entries(attrs)
-          .filter(([k]) => !skipKeys.has(k) && attrs[k] != null && attrs[k] !== "")
-          .slice(0, 12);
-        if (entries.length === 0) { view.popup.close(); return; }
-        const content = entries
-          .map(([k, v]) => `<tr><td style="color:#8899aa;padding:2px 8px 2px 0;white-space:nowrap">${k}</td><td style="word-break:break-word">${v}</td></tr>`)
-          .join("");
-        view.popup.open({
-          title: layerTitle,
-          content: `<table style="font-size:12px;line-height:1.5">${content}</table>`,
-          location: evt.mapPoint,
-        });
       });
     });
 

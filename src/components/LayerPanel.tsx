@@ -8,7 +8,7 @@ export interface LayerItem {
   visible: boolean;
   color: string;
   isAI?: boolean;
-  type?: "feature" | "kml" | "geojson";
+  type?: "feature" | "kml" | "geojson" | "csv" | "wms" | "wfs" | "map-image" | "ogc-feature" | "imagery-tile";
 }
 
 interface LayerPanelProps {

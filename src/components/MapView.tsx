@@ -1,12 +1,14 @@
 import { useEffect, useRef, useCallback } from "react";
 import { toast } from "sonner";
 
+type LayerType = "feature" | "kml" | "geojson" | "csv" | "wms" | "wfs" | "map-image" | "ogc-feature" | "imagery-tile";
+
 interface LayerConfig {
   id: string;
   url: string;
   title: string;
   visible: boolean;
-  type?: "feature" | "kml" | "geojson";
+  type?: LayerType;
 }
 
 interface MapViewProps {
@@ -24,7 +26,7 @@ const MapView = ({ layers, onMapReady, onLayerError }: MapViewProps) => {
   const initMap = useCallback(async () => {
     if (!mapDiv.current || viewRef.current) return;
 
-    const [Map, MapView, FeatureLayer, Basemap, VectorTileLayer, KMLLayer, GeoJSONLayer] = await Promise.all([
+    const [Map, MapView, FeatureLayer, Basemap, VectorTileLayer, KMLLayer, GeoJSONLayer, CSVLayer, WMSLayer, WFSLayer, MapImageLayer, OGCFeatureLayer, ImageryTileLayer] = await Promise.all([
       import("@arcgis/core/Map").then((m) => m.default),
       import("@arcgis/core/views/MapView").then((m) => m.default),
       import("@arcgis/core/layers/FeatureLayer").then((m) => m.default),
@@ -32,6 +34,12 @@ const MapView = ({ layers, onMapReady, onLayerError }: MapViewProps) => {
       import("@arcgis/core/layers/VectorTileLayer").then((m) => m.default),
       import("@arcgis/core/layers/KMLLayer").then((m) => m.default),
       import("@arcgis/core/layers/GeoJSONLayer").then((m) => m.default),
+      import("@arcgis/core/layers/CSVLayer").then((m) => m.default),
+      import("@arcgis/core/layers/WMSLayer").then((m) => m.default),
+      import("@arcgis/core/layers/WFSLayer").then((m) => m.default),
+      import("@arcgis/core/layers/MapImageLayer").then((m) => m.default),
+      import("@arcgis/core/layers/OGCFeatureLayer").then((m) => m.default),
+      import("@arcgis/core/layers/ImageryTileLayer").then((m) => m.default),
     ]);
 
     const basemap = new Basemap({
@@ -59,19 +67,24 @@ const MapView = ({ layers, onMapReady, onLayerError }: MapViewProps) => {
 
     viewRef.current = view;
 
-    const createLayer = (config: LayerConfig, FL: any, KML: any, GJ: any) => {
-      const layerType = config.type || "feature";
-      if (layerType === "kml") {
-        return new KML({ url: config.url, title: config.title, visible: config.visible });
-      } else if (layerType === "geojson") {
-        return new GJ({ url: config.url, title: config.title, visible: config.visible });
-      } else {
-        return new FL({ url: config.url, title: config.title, visible: config.visible, outFields: ["*"], popupEnabled: true });
+    const layerCtors: Record<string, any> = {
+      feature: FeatureLayer, kml: KMLLayer, geojson: GeoJSONLayer,
+      csv: CSVLayer, wms: WMSLayer, wfs: WFSLayer,
+      "map-image": MapImageLayer, "ogc-feature": OGCFeatureLayer, "imagery-tile": ImageryTileLayer,
+    };
+
+    const createLayer = (config: LayerConfig) => {
+      const Ctor = layerCtors[config.type || "feature"] || FeatureLayer;
+      const base: any = { url: config.url, title: config.title, visible: config.visible };
+      if (["feature", "wfs", "ogc-feature"].includes(config.type || "feature")) {
+        base.outFields = ["*"];
+        base.popupEnabled = true;
       }
+      return new Ctor(base);
     };
 
     for (const layerConfig of layers) {
-      const fl = createLayer(layerConfig, FeatureLayer, KMLLayer, GeoJSONLayer);
+      const fl = createLayer(layerConfig);
       fl.load().then(() => {
         map.add(fl);
         layerMapRef.current.set(layerConfig.id, fl);
@@ -97,16 +110,24 @@ const MapView = ({ layers, onMapReady, onLayerError }: MapViewProps) => {
           import("@arcgis/core/layers/FeatureLayer").then((m) => m.default),
           import("@arcgis/core/layers/KMLLayer").then((m) => m.default),
           import("@arcgis/core/layers/GeoJSONLayer").then((m) => m.default),
-        ]).then(([FL, KML, GJ]) => {
-          const layerType = layerConfig.type || "feature";
-          let fl: any;
-          if (layerType === "kml") {
-            fl = new KML({ url: layerConfig.url, title: layerConfig.title, visible: layerConfig.visible });
-          } else if (layerType === "geojson") {
-            fl = new GJ({ url: layerConfig.url, title: layerConfig.title, visible: layerConfig.visible });
-          } else {
-            fl = new FL({ url: layerConfig.url, title: layerConfig.title, visible: layerConfig.visible, outFields: ["*"], popupEnabled: true });
+          import("@arcgis/core/layers/CSVLayer").then((m) => m.default),
+          import("@arcgis/core/layers/WMSLayer").then((m) => m.default),
+          import("@arcgis/core/layers/WFSLayer").then((m) => m.default),
+          import("@arcgis/core/layers/MapImageLayer").then((m) => m.default),
+          import("@arcgis/core/layers/OGCFeatureLayer").then((m) => m.default),
+          import("@arcgis/core/layers/ImageryTileLayer").then((m) => m.default),
+        ]).then(([FL, KML, GJ, CSV, WMS, WFS, MI, OGC, IT]) => {
+          const ctors: Record<string, any> = {
+            feature: FL, kml: KML, geojson: GJ, csv: CSV,
+            wms: WMS, wfs: WFS, "map-image": MI, "ogc-feature": OGC, "imagery-tile": IT,
+          };
+          const Ctor = ctors[layerConfig.type || "feature"] || FL;
+          const base: any = { url: layerConfig.url, title: layerConfig.title, visible: layerConfig.visible };
+          if (["feature", "wfs", "ogc-feature"].includes(layerConfig.type || "feature")) {
+            base.outFields = ["*"];
+            base.popupEnabled = true;
           }
+          const fl = new Ctor(base);
           fl.load().then(() => {
             mapRef.current.add(fl);
             layerMapRef.current.set(layerConfig.id, fl);

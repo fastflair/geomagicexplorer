@@ -86,6 +86,10 @@ const MapView = ({ layers, basemapId = "dark-gray-vector", onMapReady, onLayerEr
       if (["feature", "wfs", "ogc-feature"].includes(config.type || "feature")) {
         base.outFields = ["*"];
         base.popupEnabled = true;
+        base.popupTemplate = {
+          title: config.title + " — {OBJECTID}",
+          content: [{ type: "fields" }],
+        };
       }
       return new Ctor(base);
     };
@@ -150,6 +154,10 @@ const MapView = ({ layers, basemapId = "dark-gray-vector", onMapReady, onLayerEr
           if (["feature", "wfs", "ogc-feature"].includes(layerConfig.type || "feature")) {
             base.outFields = ["*"];
             base.popupEnabled = true;
+            base.popupTemplate = {
+              title: layerConfig.title + " — {OBJECTID}",
+              content: [{ type: "fields" }],
+            };
           }
           const fl = new Ctor(base);
           fl.load().then(() => {

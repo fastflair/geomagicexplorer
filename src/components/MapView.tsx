@@ -1,5 +1,6 @@
-import { useEffect, useRef, useCallback } from "react";
+import { useEffect, useRef, useCallback, useState } from "react";
 import { toast } from "sonner";
+import FeatureDetailPanel from "./FeatureDetailPanel";
 
 type LayerType = "feature" | "kml" | "geojson" | "csv" | "wms" | "wfs" | "map-image" | "ogc-feature" | "imagery-tile";
 
@@ -9,6 +10,11 @@ interface LayerConfig {
   title: string;
   visible: boolean;
   type?: LayerType;
+}
+
+interface FeatureInfo {
+  title: string;
+  attributes: Record<string, any>;
 }
 
 interface MapViewProps {
@@ -23,6 +29,7 @@ const MapView = ({ layers, basemapId = "dark-gray-vector", onMapReady, onLayerEr
   const viewRef = useRef<any>(null);
   const mapRef = useRef<any>(null);
   const layerMapRef = useRef<Map<string, any>>(new Map());
+  const [selectedFeature, setSelectedFeature] = useState<FeatureInfo | null>(null);
 
   const initMap = useCallback(async () => {
     if (!mapDiv.current || viewRef.current) return;
@@ -66,10 +73,7 @@ const MapView = ({ layers, basemapId = "dark-gray-vector", onMapReady, onLayerEr
       center: [-98.5, 39.8],
       zoom: 4,
       ui: { components: ["zoom", "compass"] },
-      popup: {
-        dockEnabled: true,
-        dockOptions: { position: "bottom-right", breakpoint: false },
-      },
+      popup: { enabled: false } as any,
     });
 
     viewRef.current = view;
@@ -85,11 +89,7 @@ const MapView = ({ layers, basemapId = "dark-gray-vector", onMapReady, onLayerEr
       const base: any = { url: config.url, title: config.title, visible: config.visible };
       if (["feature", "wfs", "ogc-feature"].includes(config.type || "feature")) {
         base.outFields = ["*"];
-        base.popupEnabled = true;
-        base.popupTemplate = {
-          title: config.title + " — {OBJECTID}",
-          content: [{ type: "fields" }],
-        };
+        base.popupEnabled = false;
       }
       return new Ctor(base);
     };
@@ -113,14 +113,18 @@ const MapView = ({ layers, basemapId = "dark-gray-vector", onMapReady, onLayerEr
 
     await view.when();
 
-    // Let ArcGIS handle popups natively (layers have popupEnabled + outFields=["*"])
-    // Just clear popup when clicking empty space
+    // Custom click handler — show React detail panel
     view.on("click", (evt: any) => {
       view.hitTest(evt).then((response: any) => {
-        const hasGraphic = response.results?.some((r: any) => r.graphic?.layer);
-        if (!hasGraphic) {
-          view.popup.close();
+        const result = response.results?.find((r: any) => r.graphic?.attributes && r.graphic?.layer);
+        if (!result) {
+          setSelectedFeature(null);
+          return;
         }
+        setSelectedFeature({
+          title: result.graphic.layer?.title || "Feature",
+          attributes: { ...result.graphic.attributes },
+        });
       });
     });
 
@@ -153,11 +157,7 @@ const MapView = ({ layers, basemapId = "dark-gray-vector", onMapReady, onLayerEr
           const base: any = { url: layerConfig.url, title: layerConfig.title, visible: layerConfig.visible };
           if (["feature", "wfs", "ogc-feature"].includes(layerConfig.type || "feature")) {
             base.outFields = ["*"];
-            base.popupEnabled = true;
-            base.popupTemplate = {
-              title: layerConfig.title + " — {OBJECTID}",
-              content: [{ type: "fields" }],
-            };
+            base.popupEnabled = false;
           }
           const fl = new Ctor(base);
           fl.load().then(() => {
@@ -189,7 +189,18 @@ const MapView = ({ layers, basemapId = "dark-gray-vector", onMapReady, onLayerEr
     };
   }, [initMap]);
 
-  return <div ref={mapDiv} className="h-full w-full" />;
+  return (
+    <div className="relative h-full w-full">
+      <div ref={mapDiv} className="h-full w-full" />
+      {selectedFeature && (
+        <FeatureDetailPanel
+          title={selectedFeature.title}
+          attributes={selectedFeature.attributes}
+          onClose={() => setSelectedFeature(null)}
+        />
+      )}
+    </div>
+  );
 };
 
 export default MapView;

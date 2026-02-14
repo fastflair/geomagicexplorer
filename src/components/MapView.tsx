@@ -15,6 +15,8 @@ interface LayerConfig {
 interface FeatureInfo {
   title: string;
   attributes: Record<string, any>;
+  layerTitle: string;
+  objectId: any;
 }
 
 interface MapViewProps {
@@ -29,18 +31,19 @@ const MapView = ({ layers, basemapId = "dark-gray-vector", onMapReady, onLayerEr
   const viewRef = useRef<any>(null);
   const mapRef = useRef<any>(null);
   const layerMapRef = useRef<Map<string, any>>(new Map());
+  const loadingLayersRef = useRef<Set<string>>(new Set());
+  const highlightHandleRef = useRef<any>(null);
   const [selectedFeature, setSelectedFeature] = useState<FeatureInfo | null>(null);
 
   const initMap = useCallback(async () => {
     if (!mapDiv.current || viewRef.current) return;
 
-    // Suppress ArcGIS identity manager popup for layers requiring auth
     const esriId = await import("@arcgis/core/identity/IdentityManager").then((m) => m.default);
     esriId.destroyCredentials();
     (esriId as any).getCredential = () => Promise.reject(new Error("Auth suppressed"));
     (esriId as any).checkSignInStatus = () => Promise.reject(new Error("Auth suppressed"));
 
-    const [Map, MapView, FeatureLayer, Basemap, VectorTileLayer, KMLLayer, GeoJSONLayer, CSVLayer, WMSLayer, WFSLayer, MapImageLayer, OGCFeatureLayer, ImageryTileLayer] = await Promise.all([
+    const [Map, EsriMapView, FeatureLayer, , , KMLLayer, GeoJSONLayer, CSVLayer, WMSLayer, WFSLayer, MapImageLayer, OGCFeatureLayer, ImageryTileLayer] = await Promise.all([
       import("@arcgis/core/Map").then((m) => m.default),
       import("@arcgis/core/views/MapView").then((m) => m.default),
       import("@arcgis/core/layers/FeatureLayer").then((m) => m.default),
@@ -56,18 +59,10 @@ const MapView = ({ layers, basemapId = "dark-gray-vector", onMapReady, onLayerEr
       import("@arcgis/core/layers/ImageryTileLayer").then((m) => m.default),
     ]);
 
-    const basemap = new Basemap({
-      baseLayers: [
-        new VectorTileLayer({
-          url: "https://basemaps.arcgis.com/arcgis/rest/services/World_Basemap_v2/VectorTileServer",
-        }),
-      ],
-    });
-
     const map = new Map({ basemap: "dark-gray-vector" });
     mapRef.current = map;
 
-    const view = new MapView({
+    const view = new EsriMapView({
       container: mapDiv.current,
       map,
       center: [-98.5, 39.8],
@@ -77,67 +72,120 @@ const MapView = ({ layers, basemapId = "dark-gray-vector", onMapReady, onLayerEr
     });
 
     viewRef.current = view;
-
-    const layerCtors: Record<string, any> = {
-      feature: FeatureLayer, kml: KMLLayer, geojson: GeoJSONLayer,
-      csv: CSVLayer, wms: WMSLayer, wfs: WFSLayer,
-      "map-image": MapImageLayer, "ogc-feature": OGCFeatureLayer, "imagery-tile": ImageryTileLayer,
-    };
-
-    const createLayer = (config: LayerConfig) => {
-      const Ctor = layerCtors[config.type || "feature"] || FeatureLayer;
-      const base: any = { url: config.url, title: config.title, visible: config.visible };
-      if (["feature", "wfs", "ogc-feature"].includes(config.type || "feature")) {
-        base.outFields = ["*"];
-        base.popupEnabled = false;
-      }
-      return new Ctor(base);
-    };
-
-    for (const layerConfig of layers) {
-      const fl = createLayer(layerConfig);
-      fl.load().then(() => {
-        map.add(fl);
-        layerMapRef.current.set(layerConfig.id, fl);
-      }).catch((err: any) => {
-        console.warn(`Layer "${layerConfig.title}" failed to load:`, err);
-        const msg = err?.details?.raw?.message || err?.message || "";
-        if (msg.toLowerCase().includes("token")) {
-          toast.error(`Layer "${layerConfig.title}" requires authentication and was removed.`);
-        } else {
-          toast.error(`Layer "${layerConfig.title}" could not be loaded — the service may be unavailable.`);
-        }
-        onLayerError?.(layerConfig.id);
-      });
-    }
-
     await view.when();
 
-    // Custom click handler — show React detail panel
-    view.on("click", (evt: any) => {
-      view.hitTest(evt).then((response: any) => {
-        const result = response.results?.find((r: any) => r.graphic?.attributes && r.graphic?.layer);
-        if (!result) {
-          setSelectedFeature(null);
-          return;
+    // Click handler with highlight/grey-out
+    view.on("click", async (evt: any) => {
+      const response: any = await view.hitTest(evt);
+      const result = response.results?.find((r: any) => r.graphic?.attributes && r.graphic?.layer);
+
+      // Remove previous highlight
+      if (highlightHandleRef.current) {
+        highlightHandleRef.current.remove();
+        highlightHandleRef.current = null;
+      }
+
+      if (!result) {
+        // Clear selection — restore all layers to full opacity
+        setSelectedFeature(null);
+        restoreAllLayers();
+        return;
+      }
+
+      const clickedLayer = result.graphic.layer;
+      const clickedOid = result.graphic.attributes[clickedLayer.objectIdField || "OBJECTID"] ?? result.graphic.attributes["FID"];
+
+      // Grey out all other layers, dim non-selected features on clicked layer
+      for (const [, layer] of layerMapRef.current) {
+        if (!layer.visible) continue;
+        if (layer === clickedLayer) {
+          // Use featureEffect to grey out non-selected features
+          try {
+            layer.featureEffect = {
+              filter: {
+                where: `${clickedLayer.objectIdField || "OBJECTID"} = ${clickedOid}`,
+              },
+              excludedEffect: "grayscale(100%) opacity(0.25)",
+              includedEffect: "brightness(1.2) drop-shadow(0px 0px 6px white)",
+            };
+          } catch {
+            // featureEffect not supported on this layer type
+          }
+        } else {
+          // Dim other layers
+          try {
+            layer.featureEffect = {
+              filter: { where: "1=0" },
+              excludedEffect: "grayscale(100%) opacity(0.25)",
+            };
+          } catch {
+            layer.opacity = 0.2;
+          }
         }
-        setSelectedFeature({
-          title: result.graphic.layer?.title || "Feature",
-          attributes: { ...result.graphic.attributes },
-        });
+      }
+
+      // Highlight the clicked feature
+      try {
+        const layerView = await view.whenLayerView(clickedLayer);
+        highlightHandleRef.current = layerView.highlight(result.graphic);
+      } catch {
+        // highlight not supported
+      }
+
+      setSelectedFeature({
+        title: clickedLayer.title || "Feature",
+        attributes: { ...result.graphic.attributes },
+        layerTitle: clickedLayer.title,
+        objectId: clickedOid,
       });
     });
 
     onMapReady?.();
   }, []);
 
-  // Sync layer visibility
+  const restoreAllLayers = useCallback(() => {
+    for (const [, layer] of layerMapRef.current) {
+      try {
+        layer.featureEffect = null;
+      } catch {
+        // ignore
+      }
+      layer.opacity = 1;
+    }
+  }, []);
+
+  const handleClose = useCallback(() => {
+    setSelectedFeature(null);
+    restoreAllLayers();
+    if (highlightHandleRef.current) {
+      highlightHandleRef.current.remove();
+      highlightHandleRef.current = null;
+    }
+  }, [restoreAllLayers]);
+
+  // Sync layer visibility + add/remove layers
   useEffect(() => {
+    if (!mapRef.current) return;
+
+    const currentIds = new Set(layers.map((l) => l.id));
+
+    // Remove layers no longer in config
+    for (const [id, layer] of layerMapRef.current) {
+      if (!currentIds.has(id)) {
+        mapRef.current.remove(layer);
+        layerMapRef.current.delete(id);
+      }
+    }
+
+    // Update existing or add new
     for (const layerConfig of layers) {
       const existing = layerMapRef.current.get(layerConfig.id);
       if (existing) {
         existing.visible = layerConfig.visible;
-      } else if (mapRef.current) {
+      } else if (!loadingLayersRef.current.has(layerConfig.id)) {
+        // Mark as loading to prevent duplicates
+        loadingLayersRef.current.add(layerConfig.id);
+
         Promise.all([
           import("@arcgis/core/layers/FeatureLayer").then((m) => m.default),
           import("@arcgis/core/layers/KMLLayer").then((m) => m.default),
@@ -161,17 +209,21 @@ const MapView = ({ layers, basemapId = "dark-gray-vector", onMapReady, onLayerEr
           }
           const fl = new Ctor(base);
           fl.load().then(() => {
-            mapRef.current.add(fl);
-            layerMapRef.current.set(layerConfig.id, fl);
+            if (mapRef.current) {
+              mapRef.current.add(fl);
+              layerMapRef.current.set(layerConfig.id, fl);
+            }
+            loadingLayersRef.current.delete(layerConfig.id);
           }).catch((err: any) => {
             console.warn(`Layer "${layerConfig.title}" failed to load:`, err);
             toast.error(`Layer "${layerConfig.title}" could not be loaded — the service may be unavailable.`);
+            loadingLayersRef.current.delete(layerConfig.id);
             onLayerError?.(layerConfig.id);
           });
         });
       }
     }
-  }, [layers]);
+  }, [layers, onLayerError]);
 
   // Sync basemap changes
   useEffect(() => {
@@ -182,10 +234,14 @@ const MapView = ({ layers, basemapId = "dark-gray-vector", onMapReady, onLayerEr
   useEffect(() => {
     initMap();
     return () => {
+      if (highlightHandleRef.current) {
+        highlightHandleRef.current.remove();
+      }
       viewRef.current?.destroy();
       viewRef.current = null;
       mapRef.current = null;
       layerMapRef.current.clear();
+      loadingLayersRef.current.clear();
     };
   }, [initMap]);
 
@@ -196,7 +252,7 @@ const MapView = ({ layers, basemapId = "dark-gray-vector", onMapReady, onLayerEr
         <FeatureDetailPanel
           title={selectedFeature.title}
           attributes={selectedFeature.attributes}
-          onClose={() => setSelectedFeature(null)}
+          onClose={handleClose}
         />
       )}
     </div>

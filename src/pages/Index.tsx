@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from "react";
-import { Globe, ChevronLeft, ChevronRight, LogOut } from "lucide-react";
+import { Link } from "react-router-dom";
+import { Globe, ChevronLeft, ChevronRight, LogOut, BookOpen } from "lucide-react";
 import MapView, { type MapViewHandle } from "@/components/MapView";
 import LayerPanel, { type LayerItem } from "@/components/LayerPanel";
 import BasemapSelector from "@/components/BasemapSelector";
@@ -183,6 +184,13 @@ const Index = () => {
                 onExportImage={() => mapRef.current?.exportImage()}
               />
               <ThemeToggle isDark={isDark} onToggle={() => setIsDark(!isDark)} />
+              <Link
+                to="/tutorials"
+                className="p-1.5 rounded-md text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
+                title="Tutorials"
+              >
+                <BookOpen className="h-4 w-4" />
+              </Link>
               <button
                 onClick={signOut}
                 className="p-1.5 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"

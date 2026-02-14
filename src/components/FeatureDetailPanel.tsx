@@ -1,10 +1,11 @@
-import { X } from "lucide-react";
+import { X, Locate } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
 interface FeatureDetailPanelProps {
   title: string;
   attributes: Record<string, any>;
   onClose: () => void;
+  onFlyTo?: () => void;
 }
 
 const SKIP_KEYS = new Set([
@@ -28,7 +29,7 @@ const formatKey = (key: string): string => {
     .replace(/\b\w/g, (c) => c.toUpperCase());
 };
 
-const FeatureDetailPanel = ({ title, attributes, onClose }: FeatureDetailPanelProps) => {
+const FeatureDetailPanel = ({ title, attributes, onClose, onFlyTo }: FeatureDetailPanelProps) => {
   const entries = Object.entries(attributes).filter(
     ([k, v]) => !SKIP_KEYS.has(k) && v != null && v !== ""
   );
@@ -40,12 +41,23 @@ const FeatureDetailPanel = ({ title, attributes, onClose }: FeatureDetailPanelPr
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-sidebar-border bg-sidebar/80">
         <h3 className="text-sm font-semibold text-primary truncate pr-2">{title}</h3>
-        <button
-          onClick={onClose}
-          className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-sidebar-accent transition-colors shrink-0"
-        >
-          <X className="h-4 w-4" />
-        </button>
+        <div className="flex items-center gap-1 shrink-0">
+          {onFlyTo && (
+            <button
+              onClick={onFlyTo}
+              className="p-1 rounded-md text-muted-foreground hover:text-primary hover:bg-sidebar-accent transition-colors"
+              title="Fly to feature"
+            >
+              <Locate className="h-4 w-4" />
+            </button>
+          )}
+          <button
+            onClick={onClose}
+            className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-sidebar-accent transition-colors"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
       </div>
 
       {/* Attributes */}

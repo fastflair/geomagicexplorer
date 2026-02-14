@@ -14,6 +14,66 @@ export type Database = {
   }
   public: {
     Tables: {
+      bookmarks: {
+        Row: {
+          center_x: number
+          center_y: number
+          created_at: string
+          id: string
+          name: string
+          user_id: string
+          zoom: number
+        }
+        Insert: {
+          center_x: number
+          center_y: number
+          created_at?: string
+          id?: string
+          name: string
+          user_id: string
+          zoom: number
+        }
+        Update: {
+          center_x?: number
+          center_y?: number
+          created_at?: string
+          id?: string
+          name?: string
+          user_id?: string
+          zoom?: number
+        }
+        Relationships: []
+      }
+      drawings: {
+        Row: {
+          created_at: string
+          geometry: Json
+          id: string
+          name: string
+          note: string | null
+          symbol: Json | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          geometry: Json
+          id?: string
+          name?: string
+          note?: string | null
+          symbol?: Json | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          geometry?: Json
+          id?: string
+          name?: string
+          note?: string | null
+          symbol?: Json | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           avatar_url: string | null

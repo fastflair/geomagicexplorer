@@ -1,9 +1,12 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { Globe, ChevronLeft, ChevronRight, LogOut } from "lucide-react";
-import MapView from "@/components/MapView";
+import MapView, { type MapViewHandle } from "@/components/MapView";
 import LayerPanel, { type LayerItem } from "@/components/LayerPanel";
 import BasemapSelector from "@/components/BasemapSelector";
 import AISearchBar from "@/components/AISearchBar";
+import BookmarkPanel from "@/components/BookmarkPanel";
+import ThemeToggle from "@/components/ThemeToggle";
+import ShareExport from "@/components/ShareExport";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -43,7 +46,13 @@ const Index = () => {
   const [layers, setLayers] = useState<LayerItem[]>(DEFAULT_LAYERS);
   const [basemapId, setBasemapId] = useState("dark-gray-vector");
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [isDark, setIsDark] = useState(true);
   const { user, signOut } = useAuth();
+  const mapRef = useRef<MapViewHandle>(null);
+
+  useEffect(() => {
+    document.documentElement.classList.toggle("dark", isDark);
+  }, [isDark]);
 
   // Load saved layers from DB
   useEffect(() => {
@@ -80,7 +89,6 @@ const Index = () => {
       prev.map((l) => {
         if (l.id !== id) return l;
         const updated = { ...l, visible: !l.visible };
-        // Persist visibility for saved (AI) layers
         if (l.isAI) {
           supabase.from("saved_layers").update({ visible: updated.visible }).eq("id", id).then();
         }
@@ -103,7 +111,6 @@ const Index = () => {
     async (layer: { id: string; url: string; title: string; color: string; type?: string }) => {
       if (!user) return;
 
-      // Save to DB
       const { data, error } = await supabase
         .from("saved_layers")
         .insert({
@@ -140,8 +147,21 @@ const Index = () => {
     [user]
   );
 
+  const handleFilter = useCallback((layerId: string, where: string | null) => {
+    mapRef.current?.applyFilter(layerId, where);
+  }, []);
+
+  const getShareState = useCallback(() => {
+    const state = mapRef.current?.getMapState();
+    if (!state) return null;
+    return {
+      ...state,
+      layers: layers.filter((l) => l.visible).map((l) => l.id),
+    };
+  }, [layers]);
+
   return (
-    <div className="dark h-full flex relative">
+    <div className={`${isDark ? "dark" : ""} h-full flex relative`}>
       {/* Sidebar */}
       <div
         className={`${
@@ -157,25 +177,40 @@ const Index = () => {
                 GeoExplorer
               </h1>
             </div>
-            <button
-              onClick={signOut}
-              className="p-1.5 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
-              title="Sign out"
-            >
-              <LogOut className="h-4 w-4" />
-            </button>
+            <div className="flex items-center gap-1">
+              <ShareExport
+                getMapState={getShareState}
+                onExportImage={() => mapRef.current?.exportImage()}
+              />
+              <ThemeToggle isDark={isDark} onToggle={() => setIsDark(!isDark)} />
+              <button
+                onClick={signOut}
+                className="p-1.5 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                title="Sign out"
+              >
+                <LogOut className="h-4 w-4" />
+              </button>
+            </div>
           </div>
 
-          {/* Layers */}
+          {/* Content */}
           <div className="flex-1 overflow-y-auto px-3 py-4 space-y-6">
             <LayerPanel
               layers={layers}
               onToggle={handleToggle}
               onRemove={handleRemove}
+              onFilter={handleFilter}
             />
 
             <div className="border-t border-sidebar-border pt-4">
               <BasemapSelector selected={basemapId} onChange={setBasemapId} />
+            </div>
+
+            <div className="border-t border-sidebar-border pt-4">
+              <BookmarkPanel
+                onNavigate={(x, y, zoom) => mapRef.current?.flyTo(x, y, zoom)}
+                getMapState={() => mapRef.current?.getMapState() ?? null}
+              />
             </div>
 
             <div className="border-t border-sidebar-border pt-4">
@@ -207,7 +242,13 @@ const Index = () => {
 
       {/* Map */}
       <div className="flex-1 relative">
-        <MapView layers={layers} basemapId={basemapId} onLayerError={handleRemove} />
+        <MapView
+          ref={mapRef}
+          layers={layers}
+          basemapId={basemapId}
+          onLayerError={handleRemove}
+          showLegend={true}
+        />
       </div>
     </div>
   );

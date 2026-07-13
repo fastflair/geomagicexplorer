@@ -284,6 +284,24 @@ const Index = () => {
               </h1>
             </div>
             <div className="flex items-center gap-1">
+              <button
+                onClick={() => setChatOpen(!chatOpen)}
+                className={`p-1.5 rounded-md transition-colors ${
+                  chatOpen
+                    ? "text-primary bg-primary/10"
+                    : "text-muted-foreground hover:text-primary hover:bg-primary/10"
+                }`}
+                title="Map Agent (chat)"
+              >
+                <MessageSquare className="h-4 w-4" />
+              </button>
+              <button
+                onClick={() => setKgOpen(true)}
+                className="p-1.5 rounded-md text-muted-foreground hover:text-geo-purple hover:bg-geo-purple/10 transition-colors"
+                title="Knowledge Graph"
+              >
+                <Network className="h-4 w-4" />
+              </button>
               <ShareExport
                 getMapState={getShareState}
                 onExportImage={() => mapRef.current?.exportImage()}

@@ -87,6 +87,16 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(({ layers, basemapId = "
         toast.error("Filtering not supported for this layer type");
       }
     },
+    getVisibleLayers: () => {
+      return layers
+        .filter((l) => l.visible)
+        .map((l) => ({
+          id: l.id,
+          title: l.title,
+          url: l.url,
+          type: (l.type as string) || "feature",
+        }));
+    },
   }));
 
   const getMapState = useCallback((): { center: [number, number]; zoom: number } | null => {
@@ -495,6 +505,7 @@ export type MapViewHandle = {
   flyTo: (x: number, y: number, zoom?: number) => void;
   exportImage: () => void;
   applyFilter: (layerId: string, where: string | null) => void;
+  getVisibleLayers: () => { id: string; title: string; url: string; type: string }[];
 };
 
 MapView.displayName = "MapView";

@@ -211,8 +211,46 @@ const Index = () => {
           type: data.type as LayerItem["type"],
         },
       ]);
+
+      // Also record in the knowledge graph
+      recordLayerInKG({
+        title: data.title,
+        url: data.url,
+        color: data.color,
+        type: data.type,
+      });
     },
-    [user]
+    [user, recordLayerInKG]
+  );
+
+  // Agent context provider — reads live map state
+  const getAgentContext = useCallback((): AgentContext => {
+    const visibleLayers = mapRef.current?.getVisibleLayers() ?? [];
+    const mapExtent = mapRef.current?.getMapState() ?? undefined;
+    return { visibleLayers, mapExtent };
+  }, []);
+
+  // Handle actions returned by the map agent
+  const handleAgentActions = useCallback(
+    async (actions: AgentAction[]) => {
+      for (const action of actions) {
+        if (action.type === "fly_to") {
+          mapRef.current?.flyTo(action.longitude, action.latitude, action.zoom);
+        } else if (action.type === "add_layer") {
+          // Reuse the standard add-layer flow so it persists & records KG
+          await handleAILayer({
+            id: "",
+            url: action.url,
+            title: action.title,
+            color: action.color || "#a855f7",
+            type: action.layerType || "feature",
+          });
+        } else if (action.type === "record_kg") {
+          toast.info(`🧠 ${action.from} → ${action.relation} → ${action.to}`);
+        }
+      }
+    },
+    [handleAILayer]
   );
 
   const handleFilter = useCallback((layerId: string, where: string | null) => {

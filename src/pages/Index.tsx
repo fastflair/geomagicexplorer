@@ -1,6 +1,14 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
-import { Globe, ChevronLeft, ChevronRight, LogOut, BookOpen } from "lucide-react";
+import {
+  Globe,
+  ChevronLeft,
+  ChevronRight,
+  LogOut,
+  BookOpen,
+  MessageSquare,
+  Network,
+} from "lucide-react";
 import MapView, { type MapViewHandle } from "@/components/MapView";
 import LayerPanel, { type LayerItem } from "@/components/LayerPanel";
 import BasemapSelector from "@/components/BasemapSelector";
@@ -8,6 +16,8 @@ import AISearchBar from "@/components/AISearchBar";
 import BookmarkPanel from "@/components/BookmarkPanel";
 import ThemeToggle from "@/components/ThemeToggle";
 import ShareExport from "@/components/ShareExport";
+import ChatPanel, { type AgentAction, type AgentContext } from "@/components/ChatPanel";
+import KnowledgeGraphView from "@/components/KnowledgeGraphView";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";

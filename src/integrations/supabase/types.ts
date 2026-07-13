@@ -74,6 +74,81 @@ export type Database = {
         }
         Relationships: []
       }
+      kg_edges: {
+        Row: {
+          created_at: string
+          from_node_id: string
+          id: string
+          properties: Json
+          relation: string
+          to_node_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          from_node_id: string
+          id?: string
+          properties?: Json
+          relation: string
+          to_node_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          from_node_id?: string
+          id?: string
+          properties?: Json
+          relation?: string
+          to_node_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "kg_edges_from_node_id_fkey"
+            columns: ["from_node_id"]
+            isOneToOne: false
+            referencedRelation: "kg_nodes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "kg_edges_to_node_id_fkey"
+            columns: ["to_node_id"]
+            isOneToOne: false
+            referencedRelation: "kg_nodes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      kg_nodes: {
+        Row: {
+          created_at: string
+          external_ref: string | null
+          id: string
+          label: string
+          node_type: string
+          properties: Json
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          external_ref?: string | null
+          id?: string
+          label: string
+          node_type: string
+          properties?: Json
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          external_ref?: string | null
+          id?: string
+          label?: string
+          node_type?: string
+          properties?: Json
+          user_id?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           avatar_url: string | null

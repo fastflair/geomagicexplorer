@@ -380,6 +380,13 @@ const Index = () => {
           onLayerError={handleRemove}
           showLegend={true}
         />
+        <ChatPanel
+          open={chatOpen}
+          onClose={() => setChatOpen(false)}
+          getContext={getAgentContext}
+          onActions={handleAgentActions}
+        />
+        <KnowledgeGraphView open={kgOpen} onClose={() => setKgOpen(false)} />
       </div>
     </div>
   );

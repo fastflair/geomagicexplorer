@@ -58,8 +58,65 @@ const Index = () => {
   const [basemapId, setBasemapId] = useState("dark-gray-vector");
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [isDark, setIsDark] = useState(true);
+  const [chatOpen, setChatOpen] = useState(false);
+  const [kgOpen, setKgOpen] = useState(false);
   const { user, signOut } = useAuth();
   const mapRef = useRef<MapViewHandle>(null);
+
+  // Record a layer node in the user's knowledge graph
+  const recordLayerInKG = useCallback(
+    async (layer: { title: string; url: string; color: string; type?: string }) => {
+      if (!user) return;
+      try {
+        // Ensure layer node
+        const { data: layerNode } = await supabase
+          .from("kg_nodes")
+          .upsert(
+            {
+              user_id: user.id,
+              node_type: "layer",
+              label: layer.title,
+              external_ref: layer.url,
+              properties: { color: layer.color, type: layer.type || "feature" },
+            },
+            { onConflict: "user_id,node_type,label" }
+          )
+          .select("id")
+          .single();
+
+        // Ensure topic node from first significant word
+        const topic = layer.title.split(/[\s\-–]/).find((w) => w.length > 3) || layer.title;
+        const { data: topicNode } = await supabase
+          .from("kg_nodes")
+          .upsert(
+            {
+              user_id: user.id,
+              node_type: "topic",
+              label: topic,
+              properties: {},
+            },
+            { onConflict: "user_id,node_type,label" }
+          )
+          .select("id")
+          .single();
+
+        if (layerNode?.id && topicNode?.id) {
+          await supabase.from("kg_edges").upsert(
+            {
+              user_id: user.id,
+              from_node_id: layerNode.id,
+              to_node_id: topicNode.id,
+              relation: "covers_topic",
+            },
+            { onConflict: "user_id,from_node_id,to_node_id,relation" }
+          );
+        }
+      } catch (e) {
+        console.warn("KG record failed:", e);
+      }
+    },
+    [user]
+  );
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", isDark);

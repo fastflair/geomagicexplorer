@@ -31,25 +31,11 @@ const DEFAULT_LAYERS: LayerItem[] = [
     color: "hsl(0, 75%, 58%)",
   },
   {
-    id: "weather-stations",
-    url: "https://services9.arcgis.com/RHVPKKiFTONKtxq3/arcgis/rest/services/NOAA_METAR_current_wind_speed_702a5_gdb/FeatureServer/0",
-    title: "NOAA Weather Stations",
-    visible: false,
-    color: "hsl(190, 90%, 55%)",
-  },
-  {
     id: "wildfires",
     url: "https://services9.arcgis.com/RHVPKKiFTONKtxq3/arcgis/rest/services/USA_Wildfires_v1/FeatureServer/0",
     title: "US Wildfires",
     visible: false,
     color: "hsl(25, 95%, 58%)",
-  },
-  {
-    id: "us-power-plants",
-    url: "https://services1.arcgis.com/Hp6G80Pky0om7QvQ/arcgis/rest/services/us_power_plants/FeatureServer/0",
-    title: "US Power Plants",
-    visible: false,
-    color: "hsl(45, 95%, 60%)",
   },
 ];
 

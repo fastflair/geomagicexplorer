@@ -505,6 +505,7 @@ export type MapViewHandle = {
   flyTo: (x: number, y: number, zoom?: number) => void;
   exportImage: () => void;
   applyFilter: (layerId: string, where: string | null) => void;
+  getVisibleLayers: () => { id: string; title: string; url: string; type: string }[];
 };
 
 MapView.displayName = "MapView";
